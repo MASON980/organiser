@@ -1,0 +1,895 @@
+
+<html>
+<head>
+	<meta content="text/html;charset=utf-8" http-equiv="Content-Type">
+	<meta content="utf-8" http-equiv="encoding">
+
+	<title>Organiser</title>
+   
+   <style>
+		button {
+			background-color: #ddd;
+		}
+		.open_task {
+			right: 1em;
+			position: absolute;
+			width:2em;
+		}
+		.task {
+			color:#000;
+		}
+		.sub_tasks {
+			width:95%;
+			right:0%;
+			position:absolute;
+		}
+		.task_header {
+			background-color:#ccc;
+		}
+		.full_wrapper {
+			background-color:#ddd;
+		}
+		.status {
+			background-color:#ddds;
+		}
+		.status_opened_task {
+			background-color:#CFC;
+		}
+		.status_closed_task {
+			background-color:#FCC;
+		}
+		.status_planning_task {
+			background-color:#FFB;
+		}
+		.status_finalising_task {
+			background-color:#CCF;
+		}
+		
+		.waiting_form {
+			display:none;
+		}
+		.visible_form {
+			display:block;
+		}
+		
+		.form_wrapper {
+			display:none;
+		}
+		
+		.fake_textarea {
+			width:90%;
+			height:4em;
+		}
+		.fake_textarea, input, select {
+			background-color: #ddd;
+			border: #ddd solid 1px;
+		}
+		.fake_textarea:hover, input:hover, select:hover {
+			background-color: #eee;
+			border: #999 solid 1px;
+		}
+		.fake_textarea:focus, input:focus, select:focus {
+			background-color: #fff;
+			border: #000 solid 1px;
+		}
+		.submit_button {
+			background-color: #ccc;
+			border: #000 solid 1px;
+		}
+		.input_number {
+			width:3em;
+			margin-left:3em;
+		}
+		.placeholder {
+			color:#777;
+			background-color:#f8f8f8;
+		}
+		#banner, #banner_backing {
+			height:5%;
+			min-height:1em;
+			position:relative;
+			top:0%;
+			width:100%;
+			left:0%;
+			z-index:3;
+		}
+		#banner {
+			position:fixed;
+			background-color:#ccc;
+		}
+	</style>
+</head>
+
+<body>
+<div id='banner_backing'> </div>
+<div id='banner'>
+	<span>order by Name, Status, Priority, Estimate</span>
+
+	<input type="text" id='search' name="search" placeholder='Search Tasks'>
+	<input type="checkbox" name="deep_search" />Deep Search
+
+	<span id='current_level'>0</span>
+	<button id='analysis' onlick='start_analysis()'>Analysis</button>
+	<span>logout</span>
+</div>
+
+<div id='content'>
+	<div id='task_-1_full_wrapper'>
+
+	</div>
+</div>
+<div id='form_base_wrapper' style='display:none;'>
+	
+	<div class='form_title'></div>
+
+	<form class='form_base'>
+		Title:
+		<input class='task_title' type="text" name="title" maxlength="30" placeholder="Task Title" /><br>
+		<input class='task_blurb' type="text" name="blurb" maxlength="150" placeholder="Brief Explanation" /><br>
+		<div contenteditable='true' class='fake_textarea task_desc' name="desc" placeholder="Everything else"></div>
+		<div contenteditable='true' class='fake_textarea task_related_links' name="related_links" placeholder="Related site, files, and folders."></div>
+
+		<input class='task_tags' type="text" name="tags" maxlength="300" placeholder="Tags" /><br>
+		
+		</br>
+		Estimate:
+		<input class='task_estimate input_number' type="number" name="estimate" min="0" /><br>
+		Priority:
+		<input class='task_priority input_number' type="number" name="priority" min="0" /><br>
+
+		<div class='task_required_wrapper'>
+		Mandatory?:
+			<input type="radio" class="radio_button task_required" name="required" value="yes" checked /> Yes
+			<input type="radio" class="radio_button task_required" name="required" value="no" /> No
+			<input type="radio" class="radio_button task_required" name="required" value="unknown" /> Unknown
+		</div>
+		
+		<div class='task_status_wrapper'>
+		Status:
+		<select class='status_select' name="status">
+			<option class="check_button task_status" value="planning">Planning</option>
+			<option class="check_button task_status" value="opened">Opened</option>
+			<option class="check_button task_status" value="finalising">Finalising</option>
+			<option class="check_button task_status" value="closed">Closed</option>
+		</select>
+		</div>
+
+		Due Date:
+		<input type="date" name="due_date" /><br>
+		
+		
+		<input type="hidden" name="super_task_id" value="-1" />
+		<input type="hidden" name="task_id" value="-1" />
+		<input class='submit_button' type="submit" value="Submit" />
+	</form>
+
+</div>
+</body>
+
+<script> 
+	var TASKS_JSON = null;
+	var OPENED = [];
+	
+	var CURRENT_TEXTAREA = null;
+	var CTRL_ON = false;
+	var CURRENT_TASK = null;
+	var SEARCH_ONGOING = null;
+
+	var INTERVAL = null;
+	var INTERVAL_EVENT = null;
+	
+	fetch_tasks(null, null, null);
+	document.getElementById("search").onchange= start_search;
+
+	// asynchronously call organiser.aspx
+	function fetch_tasks(form, task, element) {
+	var json = JSON.parse('[{"task_id":"1","title":"apple","blurb":"create an apple","desc":"we are creating an apple, I need to build one","related_links":"none atm","super_task_id":"-1","priority":"3","estimate":"4","status":"planning","required":"yes","due_date":"10/01/2016 00:00:00","direct_subtasks":"0","all_subtasks":"0","padding":""},{"task_id":"2","title":"sub apple","blurb":"what is this","desc":"sssI need to build one","related_links":"eeeee","super_task_id":"3","priority":"2","estimate":"3","status":"finalising","required":"yes","due_date":"02/04/2016 00:00:00","direct_subtasks":"0","all_subtasks":"0","padding":""},{"title":"new","blurb":"blurb%20for%20new","tags":"","estimate":"2","priority":"4","required":"unknown","status":"opened","due_date":"10%2F12%2F2016%2000%3A00%3A00","super_task_id":"-1","task_id":"3","desc":"humphas35646bng8884n5oin83brasdoijsauunkhnghn5oin83as35646bng8884n5oin83basdoijsauunkhnghn5oin83appleas35646bng8884n5oin83asdfdgsazxxzcn5oin83basdoijsauunkhnghn5oin83as35646bng8884n5oin83brasdoijsauunkhnghn5oin83bananananananas35646bng8884n5oin83brasdoijsauunkhnghn5oin83","related_links":"hahahaha"},{"selected":[]}] ');
+		json.splice(json.length-1, 1);
+		  TASKS_JSON = json;
+		  //OPENED = selected;
+          generateTasks(json, OPENED, false);
+		  
+		  return;
+/*		if (element == null) element = "content";
+		
+	  var xhttp = new XMLHttpRequest();
+	  xhttp.onreadystatechange = function() {
+		if (this.readyState == 4 && this.status == 200) {
+		  //document.getElementById(element).innerHTML
+		  //console.log(this.responseText);
+		  var json = JSON.parse(this.responseText);
+		  //var selected = json[json.length-1]['selected'];	
+		  json.splice(json.length-1, 1);
+		  TASKS_JSON = json;
+		  //OPENED = selected;
+          generateTasks(json, OPENED, false);
+		}
+	  };
+	  var task_url = "";
+	  if (task != null) task_url = "?task_id="+task;
+	  if (form === null) {
+	    xhttp.open("GET", "organiser.aspx"+task_url, true);
+		xhttp.send();
+	  
+	  } else {
+		xhttp.open("POST", "organiser.aspx"+task_url, true);
+		xhttp.setRequestHeader("Content-type", "application/x-www-form-urlencoded");	 
+		xhttp.send(form);
+	  }
+	  */
+	}
+	function generateTasks (full_json, opened, super_task_less) {
+
+		if (super_task_less != null && super_task_less != false) {
+			full_json = super_task_less;
+			super_task_less = true;
+		} else {
+			super_task_less = false;
+		}
+		generateTaskAndSubTasks(-1, full_json, super_task_less);
+
+		// selected should have some sort of order, earlier ones cannot be subtasks of later ones
+		for (var i = 0; i < opened.length; i++) {
+			if (document.getElementById("task_"+opened[i]+"_full_wrapper") == null) {
+				continue;
+			}
+			added_one = true;
+			generateTaskAndSubTasks(opened[i], full_json, false);
+			document.getElementById("open_task_"+opened[i]).innerHTML = '-';
+		}
+		var forms = document.getElementsByTagName("form");
+		for (var i = 0; i < forms.length; i++) {
+			forms[i].onchange = form_change;
+			forms[i].onsubmit = form_submit_event;
+			
+			for (var j = 0; j < forms[i].children.length; j++) {
+				if (forms[i].children[j] == null || forms[i].children[j]['tagName'] == 'BR') continue;
+				forms[i].children[j].onfocus = set_current_task;
+				forms[i].children[j].onclick = form_change;
+				forms[i].children[j].onchange = form_change;
+			}
+		}
+		for (var i = 0; i < full_json.length; i++) {
+			setup_form(full_json[i]);
+		}
+			
+		var textareas = document.getElementsByClassName("fake_textarea");
+		for (var i = 0; i < textareas.length; i++) {
+			if (textareas[i].parentNode.id == "") continue;
+			textareas[i].onfocus = textarea_in;
+			textareas[i].onblur = textarea_out;
+			textareas[i].onchange = form_change;
+			textarea_change({'target':textareas[i]});
+		}
+				
+	}
+	function generateTaskAndSubTasks (task_id, full_json, super_task_less) {
+		var sub_tasks = "";
+		var task = "";
+		for (var i = 0; i < full_json.length; i++) {
+			if (full_json[i] == null) continue;
+			if (full_json[i]['task_id'] == task_id) {
+				task = generateFullTaskHTML(full_json[i]);
+			} else if (super_task_less || full_json[i]['super_task_id'] == task_id) {
+				sub_tasks += "<div id='task_"+full_json[i]['task_id']+"_full_wrapper' class='full_wrapper'>";
+				sub_tasks += generateTaskHTML(full_json[i]);
+				sub_tasks += "</div>";
+			}
+		}
+		if (task_id == -1) {
+			task = "<div class='sub_tasks' id='task_"+task_id+"_subtasks_wrapper' ></div>";
+		} else {
+		}
+		if (document.getElementById("task_"+task_id+"_full_wrapper") == null) {
+			document.getElementById("task_-1_full_wrapper").innerHTML = task;	
+		} else {
+			document.getElementById("task_"+task_id+"_full_wrapper").innerHTML = task;		
+		}
+		var element = document.getElementById("task_"+task_id+"_full_wrapper");
+		var forms = element.getElementsByTagName("form");
+		if (forms.length > 0) {
+			forms[0].id = "task_"+task_id+"_form";
+		}
+		document.getElementById("task_"+task_id+"_subtasks_wrapper").innerHTML = sub_tasks;
+		
+	}
+	function generateFullTaskHTML (task_json) {
+
+		var task_string = "";
+		task_string += "<div id='task_"+task_json['task_id']+"'>";
+		
+		task_string += generateTaskHTML(task_json);
+
+		var form = document.getElementById('form_base_wrapper').innerHTML;
+		task_string += form;
+
+		task_string += "</div>";		
+
+		task_string += " <div class='sub_tasks' id='task_"+task_json['task_id']+"_subtasks_wrapper' ></div>";	
+
+
+		return task_string;
+	}
+	function generateTaskHTML (task_json) {
+	
+		// nothing editable in here, however this stuff will auto update when values in the form change
+		var task_string = "";
+
+		task_string += "<div id='task_"+task_json['task_id']+"_header' class='task_header status_"+task_json['status']+"_task'> ";
+		
+		task_string += "<b>"+task_json['title']+"</b> ";
+		task_string += "<span id='task_"+task_json['task_id']+"_unsaved' class='unsaved'>"+"</span> ";
+		task_string += "<span class='status'>"+task_json['status']+"</span> ";
+		task_string += " "+task_json['estimate']+" ";
+		
+		task_string += " <button id='open_task_"+task_json['task_id']+"' class='open_task' onclick='view_task(\""+task_json['task_id']+"\")'>+</button> ";
+				
+		task_string += " <div class='task_form' id='task_"+task_json['task_id']+"_form_wrapper' ></div> ";
+		
+		task_string += "</div>";
+		return task_string;
+	}
+
+	function view_task (task_id) {
+		//fetch_tasks(null, task_id, "task_"+task_id+"_subtasks_wrapper");
+		if (OPENED.indexOf(task_id) == -1) {
+			OPENED.push(task_id);
+			document.getElementById("open_task_"+task_id).innerHTML = '-';
+		} else {
+			//OPENED.splice(OPENED.indexOf(task_id), 1);
+			OPENED = remove_sub_tasks_from_open(task_id, TASKS_JSON, OPENED, 0);
+				// this messes up the ordering of generateTasks and causes some to not be shown even if they exist	
+			document.getElementById("open_task_"+task_id).innerHTML = '+';
+			task_id = null;
+			
+		}
+		//generateTaskAndSubTasks(task_id, TASKS_JSON, false);
+		generateTasks(TASKS_JSON, OPENED, SEARCH_ONGOING);
+		
+		var task_el = null;
+		if (task_id != null) task_el = "task_"+task_id;
+		update_current_task(task_el);
+	}
+	function remove_sub_tasks_from_open (task_id, full_json, opened, level) {
+		// just empty out the opened thing
+		opened.splice(opened.indexOf(task_id), 1);
+		if (level > 10) return null;
+		
+		for (var i = 0; i < full_json.length; i++) {
+			if (full_json[i]['super_task_id'] == task_id) {
+				for (var j = 0; j < opened.length; j++) {
+					if (opened[j] == full_json[i]['task_id']) {
+						opened = remove_sub_tasks_from_open(full_json[i]['task_id'], full_json, opened, level+1)
+						break;
+					}
+				}
+			}
+		}	
+		return opened;
+	}
+	
+	function setup_form (task_json) {
+			
+		var task_object = {
+			"task_id":-1,		
+			
+			"title":"",
+			"blurb":"",
+			"desc":"",
+			
+			"estimate":1,
+			"priority":1,
+			"required":0,
+			"status":0,
+			"due_date":"",	// get current date
+			"super_task_id":-1,		
+		};
+		var task_id = -1;
+		if (task_json != null) {
+			task_object = task_json;
+			task_id = task_object['task_id'];
+		} else {
+			return;
+		}
+		
+		var element = document.getElementById("task_"+task_id);
+		if (element == null) return;
+		
+		var inputs = element.getElementsByTagName('input');
+		for (var i = 0; i < inputs.length; i++) {
+			if (inputs[i].type == 'radio') continue;
+			if (inputs[i].name in task_object) {
+				inputs[i].value = decodeURIComponent(task_object[inputs[i].name]);
+			}
+		}
+		inputs = element.getElementsByClassName('fake_textarea');
+		for (var i = 0; i < inputs.length; i++) {
+			if (inputs[i].className.indexOf("task_desc") != -1) {
+				inputs[i].innerHTML = decode_string(task_object["desc"]);
+			}
+			if (inputs[i].className.indexOf("task_related_links") != -1) {
+				inputs[i].innerHTML = decode_string(task_object["related_links"]);
+			}
+		}
+				
+		inputs = element.getElementsByClassName('check_button');
+		for (var i = 0; i < inputs.length; i++) {
+			if (inputs[i].value == task_object['status']) {
+				element.getElementsByClassName("status_select")[0].selectedIndex = i;
+			} 
+		}		
+		inputs = element.getElementsByClassName('radio_button');
+		for (var i = 0; i < inputs.length; i++) {
+			if (inputs[i].value == task_object['required']) {
+				inputs[i].checked = "true";
+			}
+		}
+
+	}
+	
+	
+	function nothing_form (e) {
+		e.preventDefault();
+	}
+	function form_submit_event (e) {
+
+		e.preventDefault();
+
+		var tar = e.target;
+		form_submit(tar);
+	}
+	function form_submit (tar) {
+		var el = tar.elements;
+		var el_array = [];
+		for (var i = 0; i < el.length; i++) {
+			el_array.push(el[i]);
+		}
+		var tx = tar.getElementsByClassName('fake_textarea');
+		for (var i = 0; i < tx.length; i++) {
+			el_array.push(tx[i]);
+		}
+
+		var form = format_form(el_array, "", "", "&", "=", "");
+		
+		if (form == null) return;
+		fetch_tasks(form, null, null);
+	
+	}
+
+	function format_form (el, open, close, big_connect, little_connect, surround) {
+		// also validates
+		var format = ""; // {"apple":"banana"}
+		
+		format += open;
+		var first = false;
+		for (var i = 0; i < el.length; i++) {
+			if (el[i].value == null && el[i].innerHTML == null) {
+				continue;
+			}
+			var key = el[i].name;
+			var val = el[i].value;
+			
+			if (!validate_value(key, val)) return null;
+			
+			if (el[i].type == "radio") {
+				if (el[i].checked) {		
+				} else {	
+					continue;
+				}				
+			} else if (el[i].type == "select-one") {
+			
+			} else if (el[i].type == "submit") {
+				continue;
+			} else if (el[i].tagName == "DIV") {
+				if (el[i].className.indexOf("task_desc") != -1) {
+					key = "desc";
+				}
+				if (el[i].className.indexOf("task_related_links") != -1) {
+					key = "related_links";
+				}
+				val = encode_string(el[i].innerHTML);
+				
+			} else {
+				
+			}
+			if (first) format += big_connect;//","
+			first = true;
+			
+			format += surround+encodeURIComponent(key)+surround;
+			format += little_connect+surround+encodeURIComponent(val)+surround;
+			
+		}
+		format += close;
+		return format;
+	}
+	function validate_value (key, val) {
+		// todo
+		return true;
+	}
+	
+	// form onchange events
+	function get_form (el) {
+		while (el.tagName != "FORM") {
+			el = el.parentElement;
+		}
+		return el;
+	}
+	function set_current_task (e) {
+		var el = get_form(e.target);
+		update_current_task(el.id);
+	}
+	function update_current_task (id) {
+		var cl = document.getElementById(CURRENT_TASK);
+		if (cl != null) cl.getElementsByClassName("submit_button")[0].value = "Submit";
+
+		CURRENT_TASK = id;
+		
+		cl = document.getElementById(CURRENT_TASK);
+		if (cl != null) cl.getElementsByClassName("submit_button")[0].value = "Submit (or ctrl-s)";
+
+	}
+	function form_change (e) {
+		// class changes on status change
+
+		// update the title and so
+		
+		// update the json
+			// pass the json back rather than the form onsubmit
+
+		var el = e.target;
+		el = get_form(el);
+		set_current_task(e);
+		
+		var els = el.elements;
+		var el_array = [];
+		for (var i = 0; i < el.length; i++) {
+			el_array.push(el[i]);
+		}
+		var tx = el.getElementsByClassName('fake_textarea');
+		for (var i = 0; i < tx.length; i++) {
+			el_array.push(tx[i]);
+		}
+		var form_string = format_form(el_array, "{", "}", ",", ":", "\"");
+
+		var form_json = JSON.parse(form_string);
+		var cur_id = form_json['task_id'];//CURRENT_TASK.replace("task_", "").replace("_form");
+		var found = false;
+		var same = true;
+
+		for (var i = 0; i < TASKS_JSON.length; i++) {
+			if (TASKS_JSON[i]['task_id'] == cur_id) {
+				found = true;
+				for (var k in TASKS_JSON[i]) {
+					if (TASKS_JSON[i][k] != form_json[k] && form_json[k] != null) {
+						same = false;
+						break;
+					}
+				}
+			}
+			if (found) break;
+		}
+		if (!same) {
+			el.getElementsByClassName('submit_button')[0].style.display = "block";
+			document.getElementById("task_"+cur_id+"_unsaved").innerHTML = "Not saved.";
+		} else {
+			el.getElementsByClassName('submit_button')[0].style.display = "none";
+			document.getElementById("task_"+cur_id+"_unsaved").innerHTML = "";
+		}
+		return;
+	/*	
+		var els = el.elements;
+		var el_array = [];
+		for (var i = 0; i < el.length; i++) {
+			el_array.push(el[i]);
+		}
+		var tx = e.target.getElementsByClassName('fake_textarea');
+		for (var i = 0; i < tx.length; i++) {
+			el_array.push(tx[i]);
+		}
+		var json = format_form(el_array, "{", "}", ",", ":", '"');
+		TASKS_JSON[json['task_id']] = json;
+		generateTasks(TASKS_JSON, OPENED, false);*/
+	}
+	
+	function remove_placeholder (e, no) {
+		if (no == null) e.target.innerHTML = "";
+		e.target.className = e.target.className.replace(" placeholder", "");
+		console.log(e.target.className);
+		e.target.onclick = null;
+	}
+	
+//------	KEYBOARD EVENTS		----//
+	function textarea_in (e) {
+		CURRENT_TEXTAREA = e.target;
+		set_current_task(e);
+	}
+	function textarea_out (e) {	
+		CURRENT_TEXTAREA = null;
+		textarea_change(e);
+		form_change(e);
+	}
+		
+	document.addEventListener("keydown", keyboardInput);
+	document.addEventListener("keyup", ctrlOff);
+
+	function keyboardInput (e) {
+		var keynum;
+
+		if(window.event) { // IE                    
+		  keynum = e.keyCode;
+		} else if(e.which){ // Netscape/Firefox/Opera                   
+		  keynum = e.which;
+		}
+	//	console.log(keynum);
+		if (keynum === 17) {	// ctrl
+			CTRL_ON = true;
+			return;
+		}
+		if (CURRENT_TEXTAREA != null) {
+			if (e.target.className.indexOf(" placeholder") == -1) {
+			} else {
+				remove_placeholder(e);
+			}
+			INTERVAL_EVENT = e;
+			INTERVAL = setInterval(textarea_change_interval, 10);
+			//	if you do it immediately the keypress isn't part of the innerhtml being used in textarea_change	
+
+		}
+
+		if (keynum == 83 && CTRL_ON) {
+			console.log('submit');
+			e.preventDefault();
+			console.log(CURRENT_TASK);
+
+			if (CURRENT_TASK != null) {
+				//  todo - run submit, only if in a task
+				var el = document.getElementById(CURRENT_TASK);
+				if (el != null) form_submit(el);
+			}
+			return;
+		}
+		if (e.target.type == "text") {
+			console.log('v');
+			INTERVAL_EVENT = e;
+			INTERVAL = setInterval(form_change_interval, 10);
+		}
+	}
+	function ctrlOff (e) {
+		var keynum;
+
+		if(window.event) { // IE                    
+		  keynum = e.keyCode;
+		} else if(e.which){ // Netscape/Firefox/Opera                   
+		  keynum = e.which;
+		}
+		if (keynum === 17) {
+			CTRL_ON = false;
+			return;
+		}	
+	}
+
+	function form_change_interval () {
+		form_change(INTERVAL_EVENT);
+		clearInterval(INTERVAL);		 
+	}
+	function textarea_change_interval () {
+		textarea_change(INTERVAL_EVENT);
+		clearInterval(INTERVAL);		 
+	}
+	function textarea_change (e) {
+	
+		var len = e.target.innerHTML.length;	
+		if (len == 0 || e.target.innerHTML == "<br>") {
+			//e.target.innerHTML = "";
+		
+			if (e.target.className.indexOf("task_desc") != -1) {
+				e.target.innerHTML = "Enter a description of the task here.";
+			}
+			if (e.target.className.indexOf("task_related_links") != -1) {
+				e.target.innerHTML = "Enter links or locations to any related documents here.";
+			}
+			e.target.className += " placeholder";
+		//	e.target.onclick = remove_placeholder;
+			len = e.target.innerHTML.length;
+			// add a onclick thing and change the colour
+		}
+		var br = 0;
+		var pos = 0;
+		while ((pos = e.target.innerHTML.indexOf('\n', pos+1)) != -1 && br < 100) br++;
+		pos = 0;
+		while ((pos = e.target.innerHTML.indexOf('<br>', pos+1)) != -1 && br < 100) br++;
+		pos = 0;
+		while ((pos = e.target.innerHTML.indexOf('<\br>', pos+1)) != -1 && br < 100) br++;
+		
+		var c = e.target.style.width;
+		c = c.replace("em", "");
+		c = c.replace("%", "");
+		if (c == null || c == 0) {
+			c = 90;
+		}
+		var r = Math.floor(len/c)+2+br;
+
+		e.target.style.height=r+"em";
+		e.target.style.width=c+"%";
+		
+		// this is so textarea change will trigger the 'unsaved' notifier
+		form_change(e);
+	}
+	
+	function start_search (e) {
+		// search tasks
+		//alert('Search currently not implemented');
+		var full_json = JSON.parse(JSON.stringify(TASKS_JSON));
+		var opened = JSON.parse(JSON.stringify(OPENED));
+		
+		// TODO - check for deep seach checkbox
+		// TODO - check for quick seach checkbox
+		
+		var key = null;
+		//full_json = sort_array(full_json, key);
+		var val = e.target.value;
+		full_json = search_array(full_json, val);
+		if (val == null || val == "") {
+			SEARCH_ONGOING = null;
+		} else {
+			SEARCH_ONGOING = full_json;
+		}
+		console.log(full_json);
+		generateTasks(full_json, opened, SEARCH_ONGOING);
+	}
+	
+	function start_analysis () {
+		// make all the anlysis tools visible
+		alert('No analysis tools currently available');
+	}
+	
+	function sort_array (array, key) {
+		if (key == null) return array;
+		// TODO
+		return array;
+	}
+	function search_array (array, val) {
+		if (val == null) return array;
+		
+		for (var i = 0; i < array.length; i++) {
+			if (array[i] == null) continue;
+			var found = false;
+			for (var x in array[i]) {
+				if (array[i][x].indexOf(val) != -1) {
+					found = true;
+					continue;
+				}
+			}
+			if (!found) {
+				array[i] = null;
+			}
+		}
+		return array;
+	}
+	function show_task_in_tree (task_id) {
+		// show all the tasks and then open the supers tasks and focus on this one
+		// TODO
+	}
+	function move_to_task () {
+		// move the scroll level thing to the selected task
+		// TODO
+		
+		// <a href="#foo">Jump to #foo on same page</a>
+			// #foo being an id or name attribute
+	}
+	
+	
+// TODO - tooltips
+
+var TOOLTIPS = [
+	{'id':'', 'hover':''},
+	/*
+		search
+			deep
+			fast
+			perfect
+		tags
+	*/
+];
+
+	
+
+//----- 	STRING MANIPULATION		-----//
+	
+	// https://stackoverflow.com/questions/4253367/how-to-escape-a-json-string-containing-newline-characters-using-javascript
+	var replace_array = [
+/*		[/\\n/g, "\\n"],
+		[/\\'/g, "\\'"],
+		[/\\"/g, '\\"'],
+		[/\\&/g, "\\&"],
+		[/\\r/g, "\\r"],
+		[/\\t/g, "\\t"],
+		[/\\b/g, "\\b"],
+		[/\\f/g, "\\f"],	*/
+		[/\\n/g, "asggsjsa5tgngy90e904n5oin83"],
+		[/\\'/g, "asdoijsauung8884n5oin83"],
+		[/\\"/g, 'afbdij56yungy90e904n5oin83'],
+		[/\\&/g, "asdoijsau5550e904n5oin83"],
+		[/\\r/g, "asgdsjs90e904n5oin83"],
+		[/\\t/g, "addoijsauungy90e904n5yyn83"],
+		[/\\b/g, "dsdoiggu6gfyyy904n5oin83"],
+		[/\\f/g, "asssjsauiingy90e904n5oin83"],
+		
+		["_", "asdoijsathfgfn5oin83"],
+		["<", "as35646bng8884n5oin83"],
+		[">", 'asdoijsauunkhnghn5oin83'],
+		["/", "asdfdgsazxxzcn5oin83"],
+		["\\", "asdo345345e904n5oin83"],
+		["&nbsp;", "asdohfhbv45904n5yyn83"],
+		["%3C", "asdo55235ungyyy904n5oin83"],
+		["%3E", "asdoi34525490e904n5oin83"],
+		[";", 'affgffgfuunkhnghn5oin83'],
+		["&", 'affgfff542490j4n5oin83'],
+		["=", 'afgfffffuunkhn2349234jn83'],
+		["'", 'afgffuunkhn23iooip234jn83'],
+		['"', 'afgffggfoioiopohn49234jn83'],
+	];
+	function encode_string (string) {
+		for (var i = 0; i < replace_array.length; i++) {
+			string = continuous_replace(string, replace_array[i][0], replace_array[i][1]);
+		}
+//		string = encodeURIComponent(string);
+		return string;
+	}
+	function decode_string (string) {
+		// it needs to be the opposite order as far as I understand
+		string = decodeURIComponent(string);
+		for (var i = replace_array.length-1; i > 0; i--) {
+			string = continuous_replace(string, replace_array[i][1], replace_array[i][0]);
+		}
+		
+		string = flavour_string(string);
+		return string;
+	}
+	
+	function continuous_replace (string, needle, rep) {
+		while (string.indexOf(needle) != -1) {
+			string = string.replace(needle, rep);
+		}	
+		return string;
+	}
+	function flavour_string (string) {
+		//console.log(string);
+		
+		var valid = [
+			'b', '/b',
+			'a', '/a',
+			'h', '/h',
+			
+		];
+		string = safety_replace(string, "&lt;", "&gt;", "<", ">", valid);
+		return string;
+	}
+	function safety_replace (string, open, close, rep_o, rep_c, valid) {
+		var po = 0;
+		var pc = 0;
+		var off = 0;
+		
+		var swap = true;
+		while ((po = string.indexOf(open, off)) != -1 && (pc = string.indexOf(close, off)) != -1) {
+			swap = false;
+			if (po < pc) {
+				for (var i = 0; i < valid.length; i++) {
+					var inner = string.substring(po+open.length, pc);
+					if (inner == valid[i]) {
+						string = string.replace(open, rep_o);
+						string = string.replace(close, rep_c);
+						swap = true;
+					}
+				}
+				po = pc;
+			}
+			if (!swap) {
+				off = po+1;	// po being at least as high as pc
+			}
+		}	
+		return string;	
+	}
+
+	
+</script>
